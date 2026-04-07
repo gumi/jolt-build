@@ -1,0 +1,7 @@
+external-reference/
+_source/
+_build/
+_package/
+Dockerfile.ci-test
+.dockerignore
+.DS_Store
