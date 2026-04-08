@@ -1,6 +1,7 @@
 external-reference/
 _source/
 _build/
+_test/
 _package/
 Dockerfile.ci-test
 .dockerignore

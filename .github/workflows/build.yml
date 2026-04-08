@@ -40,6 +40,9 @@ jobs:
       - name: ${{ matrix.platform.name }} をビルドする
         run: python3 run.py build ${{ matrix.platform.name }}
 
+      - name: スモークテストを実行する
+        run: python3 run.py test ${{ matrix.platform.name }}
+
       - name: 成果物をパッケージングする
         run: python3 run.py package ${{ matrix.platform.name }}
 
@@ -68,6 +71,11 @@ jobs:
 
       - name: android_arm64_v8a をビルドする
         run: python3 run.py build android_arm64_v8a
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: スモークテストを実行する
+        run: python3 run.py test android_arm64_v8a
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 

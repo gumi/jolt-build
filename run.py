@@ -287,7 +287,6 @@ BUILD_FUNCS = {
     "android_arm64_v8a": build_jolt_android,
 }
 
-
 def copy_headers(install_dir: str, package_dir: str):
     """ヘッダーファイルをパッケージディレクトリにコピーする"""
     src = os.path.join(install_dir, "include")
@@ -402,6 +401,147 @@ def package_jolt(
     logging.info(f"Package created: {os.path.join(package_dir, archive_name)}")
 
 
+# ライブラリのビルド時に合わせるクライアント側コンパイルフラグ
+# JPH_OBJECT_STREAM: ENABLE_OBJECT_STREAM=ON (デフォルト) に対応
+JOLT_CLIENT_COMPILE_FLAGS = [
+    "-std=c++17", "-O2", "-DNDEBUG",
+    "-DJPH_OBJECT_STREAM",
+    "-fno-rtti", "-fno-exceptions",
+]
+
+
+def test_jolt_macos(install_dir: str, test_dir: str, base_dir: str):
+    """macOS arm64: スモークテストをコンパイルして実行する"""
+    logging.info("=== Testing Jolt Physics for macos_arm64 ===")
+
+    test_src = os.path.join(base_dir, "tests", "smoke_test.cpp")
+    test_bin = os.path.join(test_dir, "smoke_test")
+    include_dir = os.path.join(install_dir, "include")
+    lib_dir = os.path.join(install_dir, "lib")
+    mkdir_p(test_dir)
+
+    cmd([
+        "c++",
+        *JOLT_CLIENT_COMPILE_FLAGS,
+        f"-I{include_dir}",
+        f"-L{lib_dir}",
+        "-lJolt",
+        "-lpthread",
+        test_src,
+        "-o", test_bin,
+    ])
+    logging.info("Compile OK")
+
+    cmd([test_bin])
+    logging.info("Test PASSED")
+
+
+def test_jolt_ios_device(install_dir: str, test_dir: str, base_dir: str):
+    """iOS device arm64: クロスコンパイルしてリンク成功を確認する"""
+    logging.info("=== Testing Jolt Physics for ios_device_arm64 (link test) ===")
+
+    test_src = os.path.join(base_dir, "tests", "smoke_test.cpp")
+    test_bin = os.path.join(test_dir, "smoke_test")
+    include_dir = os.path.join(install_dir, "include")
+    lib_dir = os.path.join(install_dir, "lib")
+    mkdir_p(test_dir)
+
+    sdk_path = cmdcap(["xcrun", "--sdk", "iphoneos", "--show-sdk-path"])
+    cmd([
+        "c++",
+        *JOLT_CLIENT_COMPILE_FLAGS,
+        "-arch", "arm64",
+        "-isysroot", sdk_path,
+        "-miphoneos-version-min=13.0",
+        f"-I{include_dir}",
+        f"-L{lib_dir}",
+        "-lJolt",
+        test_src,
+        "-o", test_bin,
+    ])
+    logging.info("Link test PASSED")
+
+
+def test_jolt_ios_simulator(install_dir: str, test_dir: str, base_dir: str):
+    """iOS simulator arm64: クロスコンパイルしてリンク成功を確認する"""
+    logging.info("=== Testing Jolt Physics for ios_simulator_arm64 (link test) ===")
+
+    test_src = os.path.join(base_dir, "tests", "smoke_test.cpp")
+    test_bin = os.path.join(test_dir, "smoke_test")
+    include_dir = os.path.join(install_dir, "include")
+    lib_dir = os.path.join(install_dir, "lib")
+    mkdir_p(test_dir)
+
+    sdk_path = cmdcap(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"])
+    cmd([
+        "c++",
+        *JOLT_CLIENT_COMPILE_FLAGS,
+        "-arch", "arm64",
+        "-isysroot", sdk_path,
+        "-mios-simulator-version-min=13.0",
+        f"-I{include_dir}",
+        f"-L{lib_dir}",
+        "-lJolt",
+        test_src,
+        "-o", test_bin,
+    ])
+    logging.info("Link test PASSED")
+
+
+def test_jolt_android(install_dir: str, test_dir: str, base_dir: str):
+    """Android arm64-v8a: NDK でクロスコンパイルしてリンク成功を確認する"""
+    logging.info("=== Testing Jolt Physics for android_arm64_v8a (link test) ===")
+
+    android_home = os.environ.get("ANDROID_HOME")
+    if not android_home:
+        raise Exception("ANDROID_HOME is not set")
+
+    ndk_path = os.environ.get("ANDROID_NDK_HOME") or os.environ.get("ANDROID_NDK")
+    if not ndk_path:
+        ndk_dir = os.path.join(android_home, "ndk")
+        if os.path.exists(ndk_dir):
+            ndks = sorted(os.listdir(ndk_dir))
+            if ndks:
+                ndk_path = os.path.join(ndk_dir, ndks[-1])
+    if not ndk_path or not os.path.exists(ndk_path):
+        raise Exception("Android NDK not found. Set ANDROID_NDK_HOME or install NDK via SDK Manager.")
+
+    # NDK の clang++ を探す
+    host_tag = "darwin-x86_64" if platform.system() == "Darwin" else "linux-x86_64"
+    clangxx = os.path.join(
+        ndk_path, "toolchains", "llvm", "prebuilt", host_tag, "bin", "aarch64-linux-android21-clang++"
+    )
+    if not os.path.exists(clangxx):
+        raise Exception(f"NDK clang++ not found: {clangxx}")
+
+    test_src = os.path.join(base_dir, "tests", "smoke_test.cpp")
+    test_bin = os.path.join(test_dir, "smoke_test")
+    include_dir = os.path.join(install_dir, "include")
+    lib_dir = os.path.join(install_dir, "lib")
+    mkdir_p(test_dir)
+
+    cmd([
+        clangxx,
+        *JOLT_CLIENT_COMPILE_FLAGS,
+        "-static-libstdc++",
+        f"-I{include_dir}",
+        f"-L{lib_dir}",
+        "-lJolt",
+        test_src,
+        "-o", test_bin,
+    ], resolve=False)
+    logging.info("Link test PASSED")
+
+
+# ターゲットごとのテスト関数
+TEST_FUNCS = {
+    "macos_arm64": test_jolt_macos,
+    "ios_device_arm64": test_jolt_ios_device,
+    "ios_simulator_arm64": test_jolt_ios_simulator,
+    "android_arm64_v8a": test_jolt_android,
+}
+
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -415,6 +555,12 @@ def main():
     bp.add_argument("target", choices=TARGETS)
     bp.add_argument("--source-dir", help="ソースディレクトリ")
     bp.add_argument("--build-dir", help="ビルドディレクトリ")
+
+    # test サブコマンド
+    tp = sp.add_parser("test", help="ビルド成果物のスモークテストを実行する")
+    tp.set_defaults(op="test")
+    tp.add_argument("target", choices=TARGETS)
+    tp.add_argument("--build-dir", help="ビルドディレクトリ")
 
     # package サブコマンド
     pp = sp.add_parser("package", help="ビルド成果物をパッケージングする")
@@ -440,10 +586,12 @@ def main():
     package_dir = os.path.join(BASE_DIR, "_package", args.target)
     patch_dir = os.path.join(BASE_DIR, "patches")
 
-    if args.source_dir is not None:
+    if getattr(args, "source_dir", None) is not None:
         source_dir = os.path.abspath(args.source_dir)
-    if args.build_dir is not None:
+    if getattr(args, "build_dir", None) is not None:
         build_dir = os.path.abspath(args.build_dir)
+
+    test_dir = os.path.join(BASE_DIR, "_test", args.target)
 
     if args.op == "build":
         mkdir_p(source_dir)
@@ -459,6 +607,14 @@ def main():
             # ビルド
             build_func = BUILD_FUNCS[args.target]
             build_func(jolt_dir, build_dir)
+
+    if args.op == "test":
+        install_dir = os.path.join(build_dir, "install")
+        if not os.path.exists(install_dir):
+            raise Exception(f"Build artifacts not found: {install_dir}\nRun 'build' first.")
+
+        test_func = TEST_FUNCS[args.target]
+        test_func(install_dir, test_dir, BASE_DIR)
 
     if args.op == "package":
         if args.package_dir is not None:
