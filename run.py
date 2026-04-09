@@ -87,6 +87,8 @@ TARGETS = [
     "ios_device_arm64",
     "ios_simulator_arm64",
     "android_arm64_v8a",
+    "windows_x64",
+    "web_wasm",
 ]
 
 # ターゲット別パッチ定義
@@ -95,6 +97,8 @@ PATCHES: Dict[str, List[str]] = {
     "ios_device_arm64": [],
     "ios_simulator_arm64": [],
     "android_arm64_v8a": [],
+    "windows_x64": [],
+    "web_wasm": [],
 }
 
 
@@ -104,7 +108,9 @@ def check_target(target: str) -> bool:
     if system == "Darwin":
         return target in ("macos_arm64", "ios_device_arm64", "ios_simulator_arm64", "android_arm64_v8a")
     elif system == "Linux":
-        return target in ("android_arm64_v8a",)
+        return target in ("android_arm64_v8a", "web_wasm")
+    elif system == "Windows":
+        return target in ("windows_x64",)
     return False
 
 
@@ -279,12 +285,64 @@ def build_jolt_android(jolt_dir: str, build_dir: str):
         cmd(["ninja", "install"])
 
 
+def build_jolt_windows(jolt_dir: str, build_dir: str):
+    """Windows x64 向け Jolt Physics をビルドする"""
+    logging.info("=== Building Jolt Physics for windows_x64 ===")
+
+    cmake_src = os.path.join(jolt_dir, "Build")
+    mkdir_p(build_dir)
+
+    with cd(build_dir):
+        cmd([
+            "cmake", "-G", "Ninja",
+            "-DCMAKE_BUILD_TYPE=Distribution",
+            f"-DCMAKE_INSTALL_PREFIX={build_dir}/install",
+            "-DUSE_STATIC_MSVC_RUNTIME_LIBRARY=ON",
+            *JOLT_COMMON_CMAKE_ARGS,
+            cmake_src,
+        ])
+        cmd(["ninja"])
+        cmd(["ninja", "install"])
+
+
+def build_jolt_web(jolt_dir: str, build_dir: str):
+    """Web (Emscripten/WASM) 向け Jolt Physics をビルドする"""
+    logging.info("=== Building Jolt Physics for web_wasm ===")
+
+    emsdk = os.environ.get("EMSDK")
+    if not emsdk:
+        raise Exception("EMSDK is not set. Install and activate Emscripten SDK first.")
+
+    toolchain_file = os.path.join(
+        emsdk, "upstream", "emscripten", "cmake", "Modules", "Platform", "Emscripten.cmake"
+    )
+    if not os.path.exists(toolchain_file):
+        raise Exception(f"Emscripten toolchain file not found: {toolchain_file}")
+
+    cmake_src = os.path.join(jolt_dir, "Build")
+    mkdir_p(build_dir)
+
+    with cd(build_dir):
+        cmd([
+            "cmake", "-G", "Ninja",
+            "-DCMAKE_BUILD_TYPE=Distribution",
+            f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}",
+            f"-DCMAKE_INSTALL_PREFIX={build_dir}/install",
+            *JOLT_COMMON_CMAKE_ARGS,
+            cmake_src,
+        ])
+        cmd(["ninja"])
+        cmd(["ninja", "install"])
+
+
 # ターゲットごとのビルド関数
 BUILD_FUNCS = {
     "macos_arm64": build_jolt_macos,
     "ios_device_arm64": build_jolt_ios_device,
     "ios_simulator_arm64": build_jolt_ios_simulator,
     "android_arm64_v8a": build_jolt_android,
+    "windows_x64": build_jolt_windows,
+    "web_wasm": build_jolt_web,
 }
 
 def copy_headers(install_dir: str, package_dir: str):
@@ -303,7 +361,7 @@ def copy_libraries(install_dir: str, package_dir: str):
     if os.path.exists(src_lib):
         for root, _, files in os.walk(src_lib):
             for f in files:
-                if f.endswith(".a"):
+                if f.endswith(".a") or f.endswith(".lib"):
                     shutil.copy2(os.path.join(root, f), lib_dir)
 
 
@@ -333,13 +391,15 @@ def verify_artifacts(target: str, package_dir: str):
         logging.warning("WARNING: lib directory not found")
         return
 
-    # libJolt.a の存在確認
-    jolt_lib = os.path.join(lib_dir, "libJolt.a")
+    # ライブラリファイルの存在確認
+    jolt_lib = os.path.join(lib_dir, "Jolt.lib")
     if not os.path.exists(jolt_lib):
-        logging.warning("WARNING: libJolt.a not found")
+        jolt_lib = os.path.join(lib_dir, "libJolt.a")
+    if not os.path.exists(jolt_lib):
+        logging.warning("WARNING: Jolt library not found")
         return
 
-    logging.info(f"OK: libJolt.a found ({os.path.getsize(jolt_lib)} bytes)")
+    logging.info(f"OK: {os.path.basename(jolt_lib)} found ({os.path.getsize(jolt_lib)} bytes)")
 
     if target in ("ios_device_arm64", "ios_simulator_arm64") and platform.system() == "Darwin":
         result = cmdcap(["otool", "-l", jolt_lib], check=False)
@@ -533,12 +593,68 @@ def test_jolt_android(install_dir: str, test_dir: str, base_dir: str):
     logging.info("Link test PASSED")
 
 
+def test_jolt_windows(install_dir: str, test_dir: str, base_dir: str):
+    """Windows x64: スモークテストをコンパイルして実行する"""
+    logging.info("=== Testing Jolt Physics for windows_x64 ===")
+
+    test_src = os.path.join(base_dir, "tests", "smoke_test.cpp")
+    test_bin = os.path.join(test_dir, "smoke_test.exe")
+    include_dir = os.path.join(install_dir, "include")
+    lib_dir = os.path.join(install_dir, "lib")
+    mkdir_p(test_dir)
+
+    cmd([
+        "cl.exe",
+        "/std:c++17", "/O2", "/DNDEBUG",
+        "/DJPH_OBJECT_STREAM",
+        "/GR-", "/EHs-c-",
+        f"/I{include_dir}",
+        test_src,
+        f"/Fe:{test_bin}",
+        "/link",
+        f"/LIBPATH:{lib_dir}",
+        "Jolt.lib",
+    ])
+    logging.info("Compile OK")
+
+    cmd([test_bin])
+    logging.info("Test PASSED")
+
+
+def test_jolt_web(install_dir: str, test_dir: str, base_dir: str):
+    """Web (Emscripten/WASM): em++ でコンパイルしてリンク成功を確認する"""
+    logging.info("=== Testing Jolt Physics for web_wasm (link test) ===")
+
+    emsdk = os.environ.get("EMSDK")
+    if not emsdk:
+        raise Exception("EMSDK is not set. Install and activate Emscripten SDK first.")
+
+    test_src = os.path.join(base_dir, "tests", "smoke_test.cpp")
+    test_bin = os.path.join(test_dir, "smoke_test.js")
+    include_dir = os.path.join(install_dir, "include")
+    lib_dir = os.path.join(install_dir, "lib")
+    mkdir_p(test_dir)
+
+    cmd([
+        "em++",
+        *JOLT_CLIENT_COMPILE_FLAGS,
+        f"-I{include_dir}",
+        f"-L{lib_dir}",
+        "-lJolt",
+        test_src,
+        "-o", test_bin,
+    ])
+    logging.info("Link test PASSED")
+
+
 # ターゲットごとのテスト関数
 TEST_FUNCS = {
     "macos_arm64": test_jolt_macos,
     "ios_device_arm64": test_jolt_ios_device,
     "ios_simulator_arm64": test_jolt_ios_simulator,
     "android_arm64_v8a": test_jolt_android,
+    "windows_x64": test_jolt_windows,
+    "web_wasm": test_jolt_web,
 }
 
 
