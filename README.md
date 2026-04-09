@@ -10,6 +10,8 @@
 | iOS device | arm64 | `macos-latest` |
 | iOS simulator | arm64 | `macos-latest` |
 | Android | arm64-v8a | `ubuntu-latest` |
+| Windows | x64 | `windows-latest` |
+| Web | wasm | `ubuntu-latest` |
 
 ## ダウンロード
 
@@ -22,13 +24,15 @@ jolt-v{version}-macos_arm64.tar.gz
 jolt-v{version}-ios_device_arm64.tar.gz
 jolt-v{version}-ios_simulator_arm64.tar.gz
 jolt-v{version}-android_arm64_v8a.tar.gz
+jolt-v{version}-windows_x64.tar.gz
+jolt-v{version}-web_wasm.tar.gz
 ```
 
 各アーカイブの構成:
 
 ```
 jolt/
-├── lib/          # 静的ライブラリ (.a)
+├── lib/          # 静的ライブラリ (.a / .lib)
 ├── include/      # ヘッダーファイル
 ├── LICENSE
 ├── NOTICE
@@ -42,16 +46,21 @@ jolt/
 - CMake, Ninja
 - Xcode (macOS/iOS ターゲット)
 - Android NDK (Android ターゲット、`ANDROID_HOME` の設定が必要)
+- Visual Studio / MSVC (Windows ターゲット)
+- Emscripten SDK (Web ターゲット、`EMSDK` の設定が必要)
 
 ```bash
 # ビルド
 python3 run.py build <target>
 
+# テスト
+python3 run.py test <target>
+
 # パッケージング
 python3 run.py package <target>
 ```
 
-ターゲット: `macos_arm64`, `ios_device_arm64`, `ios_simulator_arm64`, `android_arm64_v8a`
+ターゲット: `macos_arm64`, `ios_device_arm64`, `ios_simulator_arm64`, `android_arm64_v8a`, `windows_x64`, `web_wasm`
 
 ## CI/CD
 
