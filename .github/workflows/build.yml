@@ -37,7 +37,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: ${{ matrix.platform.name }} をビルドする
         run: python3 run.py build ${{ matrix.platform.name }}
@@ -49,7 +49,7 @@ jobs:
         run: python3 run.py package ${{ matrix.platform.name }}
 
       - name: 成果物をアップロードする
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jolt.${{ matrix.platform.name }}.tar.gz
           path: _package/${{ matrix.platform.name }}/*.tar.gz
@@ -63,11 +63,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Android NDK をセットアップする
         id: setup-ndk
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
         with:
           ndk-version: r29
 
@@ -85,7 +85,7 @@ jobs:
         run: python3 run.py package android_arm64_v8a
 
       - name: 成果物をアップロードする
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jolt.android_arm64_v8a.tar.gz
           path: _package/android_arm64_v8a/*.tar.gz
@@ -99,9 +99,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: ビルドツールをインストールする
         run: choco install ninja cmake --yes
@@ -116,7 +116,7 @@ jobs:
         run: python run.py package windows_x64
 
       - name: 成果物をアップロードする
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jolt.windows_x64.tar.gz
           path: _package/windows_x64/*.tar.gz
@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: ビルドツールをインストールする
         run: |
@@ -138,7 +138,7 @@ jobs:
           sudo apt-get install -y ninja-build cmake
 
       - name: Emscripten SDK をセットアップする
-        uses: emscripten-core/setup-emsdk@v16
+        uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
         with:
           version: 3.1.60
 
@@ -152,7 +152,7 @@ jobs:
         run: python3 run.py package web_wasm
 
       - name: 成果物をアップロードする
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jolt.web_wasm.tar.gz
           path: _package/web_wasm/*.tar.gz
@@ -170,13 +170,13 @@ jobs:
       contents: write
     steps:
       - name: 全成果物をダウンロードする
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           merge-multiple: true
 
       - name: GitHub Release を作成する
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: artifacts/*.tar.gz
           generate_release_notes: true
